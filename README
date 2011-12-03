@@ -1,0 +1,9 @@
+Trailermatic - RSS downloader for Movie trailers
+================================================
+
+Trailermatic is a RSS daemon that downloads movie trailers (or any other  files matching regular expression patterns)
+at certain intervals.
+
+Trailermatic is configured via a configuration file (by default placed at /etc/trailermatic.conf)
+
+The file contains further instructions on how to configure the tool.

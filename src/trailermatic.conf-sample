@@ -1,0 +1,18 @@
+# URL of the RSS feed
+feed =  {  url     => "http://feeds.hd-trailers.net/hd-trailers/blog?format=xml" }
+
+# interval in minutes between checks for new downloads/episodes
+interval = 30
+
+# path where Trailermatic will store downloaded file
+download-folder = 
+
+# path to the file which stores already downloaded trailers
+statefile = "trailermatic.state"
+
+# patterns contains a number of regular expressions which are matched against the RSS feed entries
+
+filter = { pattern => "trailers\.apple\.com.*tlr.*h1080p"
+           useragent => "QuickTime/7.6.2"
+         }
+}
