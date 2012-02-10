@@ -267,7 +267,7 @@ PRIVATE CURL* am_curl_init(uint8_t isPost) {
   curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
   curl_easy_setopt(curl, CURLOPT_VERBOSE, getenv( "AM_CURL_VERBOSE" ) != NULL);
   curl_easy_setopt(curl, CURLOPT_POST, isPost ? 1 : 0);
-  curl_easy_setopt(curl, CURLOPT_TIMEOUT, 300L );
+  curl_easy_setopt(curl, CURLOPT_TIMEOUT, 1500L );
   curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 55L );
   curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1);
   curl_easy_setopt(curl, CURLOPT_DNS_CACHE_TIMEOUT, 600L );

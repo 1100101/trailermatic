@@ -1,0 +1,13 @@
+src/*.o
+src/trailermatic
+src/trailermatic-mw
+src/Makefile.in
+src/*.xml
+src/.deps/
+src/tests/.deps/
+Makefile
+Makefile.in
+configure
+config.log
+config.status
+aclocal.m4

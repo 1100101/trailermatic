@@ -114,7 +114,7 @@ static simple_list extract_feed_items(xmlNodeSetPtr nodes) {
             }
           } else if ((strcmp((char*) child->name, "enclosure") == 0)) {
 						enclosure = getNodeAttributes(child);
-						if ((strcmp(enclosure->type, "video/quicktime") == 0) && enclosure->url) {
+						if ((strncmp(enclosure->type, "video/", 6) == 0) && enclosure->url) {
               addItem(am_strdup(enclosure->url), &item->urls);
 						}
             
