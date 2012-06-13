@@ -411,7 +411,6 @@ int main(int argc, char **argv) {
   char *config_file = NULL;
   char *logfile = NULL;
   char *xmlfile = NULL;
-  int daemonized = 0;
   char erbuf[100];
   NODE *current = NULL;
   uint32_t count = 0;
@@ -457,7 +456,7 @@ int main(int argc, char **argv) {
       dbg_printf(P_ERROR, "Error: Daemonize failed. Aborting...");
       shutdown_daemon(session);
     }
-    daemonized = 1;
+
     dbg_printft( P_MSG, "Daemon started");
   }
 
