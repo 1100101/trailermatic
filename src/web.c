@@ -123,7 +123,7 @@ PRIVATE size_t write_header_callback(void *ptr, size_t size, size_t nmemb, void 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-PRIVATE size_t parse_Transmission_response(void *ptr, size_t size, size_t nmemb, void *data) {
+PRIVATE size_t write_data_callback(void *ptr, size_t size, size_t nmemb, void *data) {
   size_t line_len = size * nmemb;
   WebData *mem = data;
 
@@ -138,7 +138,10 @@ PRIVATE size_t parse_Transmission_response(void *ptr, size_t size, size_t nmemb,
   }
 
   if(mem->response->buffer_pos + line_len + 1 > mem->response->buffer_size) {
+   do {
     mem->response->buffer_size *= 2;
+   }while(mem->response->buffer_size < mem->response->buffer_pos + line_len + 1);
+
     mem->response->data = (char *)am_realloc(mem->response->data, mem->response->buffer_size);
   }
 
