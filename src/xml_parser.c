@@ -175,7 +175,10 @@ simple_list parse_xmldata(const char* data, uint32_t size, uint32_t* item_count,
 	}
 
 	/* Load XML document */
-	doc = xmlParseMemory(data, size);
+	if((doc = xmlParseMemory(data, size)) == NULL) {
+    doc = xmlRecoverMemory(data, size);
+  }
+  
 	if (doc == NULL) {
 		dbg_printf(P_ERROR, "Error: Unable to parse input data!");
 		return NULL;
