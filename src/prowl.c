@@ -142,10 +142,13 @@ int16_t verifyProwlAPIKey(const char* apikey) {
         dbg_printf(P_ERROR, "Error: Prowl API  key '%s' is invalid!", apikey);
         result = -response->responseCode;
       }
+      
       HTTPResponse_free(response);
     }
+    
     closeCURLSession(curl_session);
   }
+  
   return result;
 }
 
@@ -161,7 +164,7 @@ int8_t prowl_sendNotification(enum prowl_event event, const char* apikey, const 
       snprintf(desc, sizeof(desc), "%s", filename);
       break;
     case PROWL_DOWNLOAD_FAILED:
-      event_str = "Auto-Add Failed";
+      event_str = "Trailer Download Failed";
       snprintf(desc, sizeof(desc), "%s", filename);
       break;
     default:
@@ -169,7 +172,7 @@ int8_t prowl_sendNotification(enum prowl_event event, const char* apikey, const 
       return 0;
   }
 
-  dbg_printf(P_INFO2, "[prowl_sendNotification] I: %d E: %s\tD: %s", event, event_str, desc);
+  dbg_printf(P_INFO, "[prowl_sendNotification] I: %d E: %s\tD: %s", event, event_str, desc);
 
   if(sendProwlNotification(apikey, event_str, desc) == 1) {
     result = 1;

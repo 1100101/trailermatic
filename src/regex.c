@@ -10,9 +10,20 @@
 #include "memwatch.h"
 #endif
 
-#define OVECCOUNT 30
+PRIVATE int32_t getPCRECaptureCount(const pcre * code) {
+   int32_t count = 0;
+   int32_t result;
+   if(code != NULL) {
+      if((result = pcre_fullinfo(code, NULL, PCRE_INFO_CAPTURECOUNT, &count)) != 0) {
+         dbg_printf(P_ERROR, "[getPCRECaptureCount] pcre_fullinfo() returned %d", result);
+         count = result;
+      }
+   }
+   
+   return count;
+}
 
-static pcre* init_regex(const char* pattern) {
+PRIVATE pcre* init_regex(const char* pattern) {
   int err;
   pcre *re = NULL;
   const char* errbuf = NULL;
@@ -28,6 +39,7 @@ static pcre* init_regex(const char* pattern) {
   if(re == NULL) {
     dbg_printf(P_ERROR, "[init_regex] PCRE compilation failed at offset %d: %s (pattern: %s)", err, errbuf, pattern);
   }
+  
   return re;
 }
 
@@ -55,6 +67,7 @@ uint8_t isRegExMatch(const char* pattern, const char* str) {
     err = pcre_exec(preg, NULL, str, strlen(str), 0, 0, NULL, 0);
     dbg_printf(P_DBG, "[isRegExMatch] err=%d", err);
     if (!err) { /* regex matches */
+      dbg_printf(P_MSG, "[isRegExMatch] '%s' matches '%s'", pattern, str);
       result = 1;
     } else {
       if(err != PCRE_ERROR_NOMATCH) {
@@ -64,7 +77,64 @@ uint8_t isRegExMatch(const char* pattern, const char* str) {
     }
     pcre_free(preg);
   }
+  
   return result;
+}
+
+int32_t getRegExCaptureGroups(const char* pattern, const char* str, const char ***stringlist) {
+  int32_t count = -1;
+  pcre *result_preg = NULL;
+  int32_t * ovec = NULL;
+  int32_t captureGroupCount;
+  int32_t ovecSize;
+
+  if(!str || (str && strlen(str) == 0)) {
+    dbg_printf(P_ERROR, "[getRegExCaptureGroups] Empty string!");
+    return 0;
+  }
+  
+  result_preg = init_regex(pattern);
+
+  if(result_preg) {
+    captureGroupCount = getPCRECaptureCount(result_preg);
+    
+    if(captureGroupCount < 0) {
+      captureGroupCount = 9; // Fallback, in case pcre_fullinfo() returned an error
+    }
+    
+    ovecSize = captureGroupCount > 0 ? (captureGroupCount + 1 ) * 3 : 0;
+    
+    if(ovecSize > 0) {
+      ovec = (int32_t*)am_malloc(ovecSize * sizeof(int32_t));
+
+      if(ovec == NULL) {
+        dbg_printf(P_ERROR, "[getRegExCaptureGroups] malloc(offsets) failed!");
+        pcre_free(result_preg);
+        return 0;
+      }
+    }
+    
+    dbg_printf(P_DBG, "[getRegExCaptureGroups] Text to match against: %s (%d byte)", str, strlen(str));
+
+    count = pcre_exec(result_preg, NULL, str, strlen(str), 0, 0, ovec, ovecSize);
+    if(count > 1) { /* regex matches */
+      if(pcre_get_substring_list(str, ovec, count, stringlist) < 0) {
+        dbg_printf(P_ERROR, "[getRegExCaptureGroups] Unable to obtain captured strings in regular expression.");
+      }
+    } else if(count < 0) {
+      if(count == PCRE_ERROR_NOMATCH) {
+        dbg_printf(P_DBG, "[getRegExCaptureGroups] No match");
+      } else {
+        dbg_printf(P_ERROR, "[getRegExCaptureGroups] regexec error: %d", count);
+      }    
+    }
+    
+    am_free(ovec);
+    
+    pcre_free(result_preg);
+  }
+
+  return count;
 }
 
 
@@ -80,46 +150,24 @@ uint8_t isRegExMatch(const char* pattern, const char* str) {
  */
 char* getRegExMatch(const char* pattern, const char* str, uint8_t which_result) {
   int count;
-  pcre *result_preg = NULL;
   char *result_str = NULL;
-    const char **stringlist;
-  int offsets[OVECCOUNT];
+  const char **stringlist = NULL;
 
   if(!str || (str && strlen(str) == 0)) {
     dbg_printf(P_ERROR, "[getRegExMatch] Empty string!");
     return NULL;
   }
 
-  result_preg = init_regex(pattern);
-  if(result_preg) {
-    dbg_printf(P_INFO2, "[getRegExMatch] Text to match against: %s (%d byte)", str, strlen(str));
-    count = pcre_exec(result_preg, NULL, str, strlen(str), 0, 0, offsets, OVECCOUNT);
-    if(count > which_result) { /* regex matches */
-      //~ int i;
-      //~ for (i = 0; i < count; i++) {
-        //~ dbg_printf(P_DBG, "%2d: %.*s", i, offsets[2*i+1] - offsets[2*i], str + offsets[2*i]);
-      //~ }
-      //~ len = offsets[2 * which_result + 1] - offsets[2 * which_result];
-      //~ result_str = am_strndup(str + offsets[2 * which_result], len);
-      //~ dbg_printf(P_DBG, "[getMatch] result: '%s' (%d -> %d)", result_str, offsets[2 * which_result], offsets[2 * which_result + 1]);
-      if(pcre_get_substring_list(str, offsets, count, &stringlist) < 0) {
-        dbg_printf(P_ERROR, "[getRegExMatch] Unable to obtain captured strings in regular expression.");
-      } else {
-      int i;
-        for (i = 0; i < count; i++) {
-          dbg_printf(P_DBG, "%2d: %s", i, stringlist[i]);
-      }
-        result_str = am_strdup(stringlist[which_result]);
-        pcre_free_substring_list(stringlist);
-      }
-    } else if(count < 0) {
-      if(count == PCRE_ERROR_NOMATCH) {
-        dbg_printf(P_DBG, "[getRegExMatch] No match");
-      } else {
-        dbg_printf(P_ERROR, "[getRegExMatch] regexec error: %d", count);
-      }
+  count = getRegExCaptureGroups(pattern, str, &stringlist);  
+
+  if(count > 0) {
+    if(count > which_result) {
+      result_str = am_strdup(stringlist[which_result]);
+      pcre_free_substring_list(stringlist);
+    } else {
+      dbg_printf(P_ERROR, "[getRegexMatch] Requested substring (%d) exceeds number of captured substrings (%d)!", which_result, count);
     }
-    pcre_free(result_preg);
   }
+
   return strstrip(result_str);
 }

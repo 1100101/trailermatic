@@ -45,7 +45,7 @@
 #include "utils.h"
 
 /** \cond */
-#define DATA_BUFFER 1024 * 100
+#define DATA_BUFFER_SIZE 1024 * 100
 #define HEADER_BUFFER 500
 /** \endcond */
 
@@ -56,7 +56,8 @@ PRIVATE uint8_t gbGlobalInitDone = FALSE;
 /** Generic struct storing data and the size of the contained data */
 typedef struct HTTPData {
  char   *data;  /**< Stored data */
- size_t  size;  /**< Size of the stored data */
+ size_t  buffer_size;
+ size_t  buffer_pos;  /**< Size of the stored data */
 } HTTPData;
 
 /** Struct storing information about data downloaded from the web */
@@ -74,7 +75,7 @@ PUBLIC void SessionID_free(void) {
    gSessionID = NULL;
 }
 
-PRIVATE size_t write_header_callback_webdata(void *ptr, size_t size, size_t nmemb, void *data) {
+PRIVATE size_t write_header_callback(void *ptr, size_t size, size_t nmemb, void *data) {
   size_t       line_len = size * nmemb;
   WebData     *mem  = (WebData*)data;
   const char  *line = (const char*)ptr;
@@ -82,16 +83,25 @@ PRIVATE size_t write_header_callback_webdata(void *ptr, size_t size, size_t nmem
   char        *filename = NULL;
   const char  *content_pattern = "Content-Disposition:\\s(inline|attachment);\\s+filename=\"?(.+?)\"?;?\\r?\\n?$";
   int          content_length = 0;
+  static uint8_t isMoveHeader = 0;
 
+  /* check the header if it is a redirection header */
+  if(line_len >= 9 && !memcmp(line, "Location:", 9)) {
+    isMoveHeader = 1;
+    if(mem->response->data != NULL) {
+      am_free(mem->response->data);
+      mem->content_length = 0;
+    }
+  } else if(line_len >= 15 && !memcmp(line, "Content-Length:", 15)) {
   /* parse header for Content-Length to allocate correct size for data->response->data */
-  if(line_len >= 15 && !memcmp(line, "Content-Length:", 15)) {
     tmp = getRegExMatch("Content-Length:\\s(\\d+)", line, 1);
     if(tmp != NULL) {
-      dbg_printf(P_INFO2, "[write_header_callback] Content-Length: %s", tmp);
+      dbg_printf(P_INFO2, "Content-Length: %s", tmp);
       content_length = atoi(tmp);
-      if(content_length > 0) {
+      if(content_length > 0 && !isMoveHeader) {
         mem->content_length = content_length;
-        mem->response->data = am_realloc(mem->response->data, content_length + 1);
+        mem->response->buffer_size = content_length + 1;
+        mem->response->data = am_realloc(mem->response->data, mem->response->buffer_size);
       }
       am_free(tmp);
     }
@@ -102,6 +112,9 @@ PRIVATE size_t write_header_callback_webdata(void *ptr, size_t size, size_t nmem
       mem->content_filename = filename;
       dbg_printf(P_INFO2, "[write_header_callback] Found filename: %s", mem->content_filename);
     }
+  } else if(line_len >= 2 && !memcmp(line, "\r\n", 2)) {
+    /* We're at the end of a header, reaset the relocation flag */
+    isMoveHeader = 0;
   }
 
   return line_len;
@@ -110,7 +123,7 @@ PRIVATE size_t write_header_callback_webdata(void *ptr, size_t size, size_t nmem
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-PRIVATE size_t write_data_callback_webdata(void *ptr, size_t size, size_t nmemb, void *data) {
+PRIVATE size_t parse_Transmission_response(void *ptr, size_t size, size_t nmemb, void *data) {
   size_t line_len = size * nmemb;
   WebData *mem = data;
 
@@ -119,18 +132,20 @@ PRIVATE size_t write_data_callback_webdata(void *ptr, size_t size, size_t nmemb,
    * as a fallback, allocate a predefined size of memory and realloc if necessary
   **/
   if(!mem->response->data) {
-    mem->response->data = (char*)am_malloc(DATA_BUFFER);
-    dbg_printf(P_INFO2, "[write_data_callback] allocated %d bytes for mem->response->data", DATA_BUFFER);
+    mem->response->buffer_size = DATA_BUFFER_SIZE;
+    mem->response->data = (char*)am_malloc(mem->response->buffer_size);
+    dbg_printf(P_INFO2, "[write_data_callback] allocated %d bytes for mem->response->data", mem->response->buffer_size);
   }
 
-  if(mem->response->size + line_len + 1 > DATA_BUFFER) {
-    mem->response->data = (char *)am_realloc(mem->response->data, mem->response->size + line_len + 1);
+  if(mem->response->buffer_pos + line_len + 1 > mem->response->buffer_size) {
+    mem->response->buffer_size *= 2;
+    mem->response->data = (char *)am_realloc(mem->response->data, mem->response->buffer_size);
   }
 
-  if (mem->response->data) {
-    memcpy(&(mem->response->data[mem->response->size]), ptr, line_len);
-    mem->response->size += line_len;
-    mem->response->data[mem->response->size] = 0;
+  if(mem->response->data) {
+    memcpy(&(mem->response->data[mem->response->buffer_pos]), ptr, line_len);
+    mem->response->buffer_pos += line_len;
+    mem->response->data[mem->response->buffer_pos] = 0;
   }
 
   return line_len;
@@ -146,8 +161,10 @@ PRIVATE struct HTTPData* HTTPData_new(void) {
   if(!data) {
     return NULL;
   }
+
   data->data = NULL;
-  data->size = 0;
+  data->buffer_size = 0;
+  data->buffer_pos = 0;
   return data;
 }
 
@@ -174,7 +191,6 @@ PRIVATE void WebData_free(struct WebData *data) {
   if(data) {
     am_free(data->url);
     am_free(data->content_filename);
-    //HTTPData_free(data->header);
     HTTPData_free(data->response);
     am_free(data);
     data = NULL;
@@ -226,7 +242,8 @@ PRIVATE void WebData_clear(struct WebData *data) {
     if(data->response) {
       am_free(data->response->data);
       data->response->data = NULL;
-      data->response->size = 0;
+      data->response->buffer_size = 0;
+      data->response->buffer_pos = 0;
     }
   }
 }
@@ -275,6 +292,12 @@ PRIVATE CURL* am_curl_init(uint8_t isPost) {
   curl_easy_setopt(curl, CURLOPT_MAXREDIRS, 5L );
   curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L );
 
+  // The  encoding option was renamed in curl 7.21.6
+#if LIBCURL_VERSION_NUM < 0x071506
+  curl_easy_setopt(curl, CURLOPT_ENCODING, "" );
+#else
+  curl_easy_setopt(curl, CURLOPT_ACCEPT_ENCODING, "" );
+#endif
   dbg_printf(P_INFO2, "[am_curl_init] Created new curl session %p", (void*)curl);
 
   return curl;
@@ -412,8 +435,8 @@ PUBLIC HTTPResponse* getHTTPData(const char *url, const char *cookies, CURL ** c
     escaped_url = url_encode_whitespace(url);
     assert(escaped_url);
     curl_easy_setopt(curl_handle, CURLOPT_URL, escaped_url);
-    curl_easy_setopt(curl_handle, CURLOPT_HEADERFUNCTION, write_header_callback_webdata);
-    curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, write_data_callback_webdata);
+    curl_easy_setopt(curl_handle, CURLOPT_HEADERFUNCTION, write_header_callback);
+    curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, write_data_callback);
     curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, data);
     curl_easy_setopt(curl_handle, CURLOPT_WRITEHEADER, data);
 
@@ -439,7 +462,7 @@ PUBLIC HTTPResponse* getHTTPData(const char *url, const char *cookies, CURL ** c
       resp->responseCode = responseCode;
       //copy data if present
       if(data->response->data) {
-        resp->size = data->response->size;
+        resp->size = data->response->buffer_pos;
         resp->data = am_strndup(data->response->data, resp->size);
       }
       //copy filename if present
@@ -494,8 +517,8 @@ PUBLIC HTTPResponse* sendHTTPData(const char *url, const void *data, uint32_t da
         gbGlobalInitDone = TRUE;
       }
       if( ( curl_handle = am_curl_init(TRUE) ) ) {
-        curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, write_data_callback_webdata);
-        curl_easy_setopt(curl_handle, CURLOPT_HEADERFUNCTION, write_header_callback_webdata);
+        curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, write_data_callback);
+        curl_easy_setopt(curl_handle, CURLOPT_HEADERFUNCTION, write_header_callback);
         curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, response_data);
         curl_easy_setopt(curl_handle, CURLOPT_WRITEHEADER, response_data);
         curl_easy_setopt(curl_handle, CURLOPT_URL, response_data->url);
@@ -516,10 +539,11 @@ PUBLIC HTTPResponse* sendHTTPData(const char *url, const void *data, uint32_t da
       dbg_printf(P_INFO2, "response code: %ld", rc);
       if(rc == 409) {
         if(gSessionID) {
-          dbg_printf(P_INFO2, "Error code 409, session ID: %s", gSessionID);
+          dbg_printf(P_DBG, "Error code 409, session ID: %s", gSessionID);
         } else {
-          dbg_printf(P_INFO2, "Error code 409, no session ID");
+          dbg_printf(P_ERROR, "Error code 409, no session ID");
         }
+
         closeCURLSession( curl_handle );
         curl_slist_free_all( headers );
         headers = NULL;
@@ -530,7 +554,7 @@ PUBLIC HTTPResponse* sendHTTPData(const char *url, const void *data, uint32_t da
 
         //copy data if present
         if(response_data->response->data) {
-          resp->size = response_data->response->size;
+          resp->size = response_data->response->buffer_pos;
           resp->data = am_strndup(response_data->response->data, resp->size);
         }
         //copy filename if present
@@ -553,7 +577,6 @@ PUBLIC HTTPResponse* sendHTTPData(const char *url, const void *data, uint32_t da
 
   return resp;
 }
-
 
 PUBLIC void closeCURLSession(CURL* curl_handle) {
   if(curl_handle) {

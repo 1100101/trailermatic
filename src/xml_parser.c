@@ -51,10 +51,7 @@ static int getNodeText(xmlNodePtr child, char **dest) {
 	xmlChar * textNode;
 	int result = 0;
   
-  if(*dest != NULL) {
-    dbg_printf(P_ERROR, "Error: *dest != NULL!");
-  }
-
+  assert(dest && *dest);
 	textNode = xmlNodeGetContent(child);
 	*dest = am_strdup((char*) textNode);
 	xmlFree(textNode);
