@@ -138,7 +138,7 @@ PRIVATE void shutdown_daemon(auto_handle *as) {
   if (as && as->bucket_changed) {
     save_state(as->statefile, as->downloads);
   }
-  
+
   session_free(as);
   SessionID_free();
   log_close();
@@ -316,9 +316,9 @@ PRIVATE void processRSSList(auto_handle *session, const simple_list items, uint1
               if(session->prowl_key_valid) {
                 prowl_sendNotification(PROWL_NEW_TRAILER, session->prowl_key, item->name);
               }
-              
+
               dbg_printf(P_MSG, "  Download complete (%dMB) (%.2fkB/s)", response->size / 1024 / 1024, response->downloadSpeed / 1024);
-              /* add url to bucket list */      
+              /* add url to bucket list */
               if (addToBucket(url, &session->downloads, session->max_bucket_items) == 0) {
                 session->bucket_changed = 1;
                 save_state(session->statefile, session->downloads);
@@ -329,17 +329,17 @@ PRIVATE void processRSSList(auto_handle *session, const simple_list items, uint1
                 prowl_sendNotification(PROWL_DOWNLOAD_FAILED, session->prowl_key, item->name);
               }
             }
-            
+
             HTTPResponse_free(response);
           }
         } else {
           dbg_printf(P_MSG, "File downloaded previously: %s", basename(path));
         }
       }
-      
+
       current_url = current_url->next;
     }
-    
+
     current_item = current_item->next;
   }
 }
@@ -471,7 +471,7 @@ int main(int argc, char **argv) {
   dbg_printf(P_INFO, "state file: %s", session->statefile);
   dbg_printf(P_MSG,  "%d feed URLs", listCount(session->feeds));
   dbg_printf(P_MSG,  "Read %d filters from config file", listCount(session->filters));
-  
+
   if(session->prowl_key) {
     dbg_printf(P_INFO, "Prowl API key: %s", session->prowl_key);
   }
@@ -485,12 +485,12 @@ int main(int argc, char **argv) {
     dbg_printf(P_ERROR, "No filters specified in trailermatic.conf!\n");
     shutdown_daemon(session);
   }
-  
+
   /* check if Prowl API key is given, and if it is valid */
   if(session->prowl_key && verifyProwlAPIKey(session->prowl_key) ) { 
     session->prowl_key_valid = 1;
   }
-  
+
   load_state(session->statefile, &session->downloads);
   while(!closing) {
     dbg_printft( P_INFO, "------ Checking for new trailers ------");
