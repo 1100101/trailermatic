@@ -35,7 +35,7 @@
 
 
 struct HTTPResponse {
- uint32_t responseCode;
+ long     responseCode;
  size_t   size;
  double   downloadSpeed;
  char    *data;
