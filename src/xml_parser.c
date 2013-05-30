@@ -65,10 +65,10 @@ static rssNode* getNodeAttributes(xmlNodePtr child) {
 	rssNode *tmp = am_malloc(sizeof(rssNode));
 	xmlAttrPtr attr = child->properties;
 
-  tmp->url = NULL;
-  tmp->type = NULL;
-  
-	while (attr) {
+   tmp->url = NULL;
+   tmp->type = NULL;
+
+   while (attr) {
 		if ((strcmp((char*) attr->name, "url") == 0)) {
 			getNodeText(attr->children, &tmp->url);
 		} else if ((strcmp((char*) attr->name, "content") == 0) || (strcmp(
@@ -77,6 +77,7 @@ static rssNode* getNodeAttributes(xmlNodePtr child) {
 		}
 		attr = attr->next;
 	}
+
 	return tmp;
 }
 
@@ -104,36 +105,38 @@ static simple_list extract_feed_items(xmlNodeSetPtr nodes) {
 				while (child) {
 					if ((strcmp((char*) child->name, "title") == 0)) {
 						name_set = getNodeText(child->children, &item->name);
-          } else if((strcmp((char*)child->name, "link") == 0)) {
-            char* link = NULL;
-            if(getNodeText(child->children, &link)) {
-              addItem(link, &item->urls);
+               } else if((strcmp((char*)child->name, "link") == 0)) {
+                  char* link = NULL;
+                  if(getNodeText(child->children, &link)) {
+                     addItem(link, &item->urls);
+                  }
+               } else if ((strcmp((char*) child->name, "enclosure") == 0)) {
+                  enclosure = getNodeAttributes(child);
+
+                  if ( enclosure->url != NULL && enclosure->type != NULL && strncmp(enclosure->type, "video/", 6) == 0 ) {
+                     addItem(am_strdup(enclosure->url), &item->urls);
+   			      }
+
+                  freeNode(enclosure);
+			      }
+
+			      child = child->next;
+		      }
+
+   	      if (name_set && listCount(item->urls) > 0) {
+	   	      addItem(item, &itemList);
+		      } else {
+               freeFeedItem(item);
             }
-          } else if ((strcmp((char*) child->name, "enclosure") == 0)) {
-						enclosure = getNodeAttributes(child);
-						if ((strncmp(enclosure->type, "video/", 6) == 0) && enclosure->url) {
-              addItem(am_strdup(enclosure->url), &item->urls);
-						}
-            
-            freeNode(enclosure);
-					}
 
-					child = child->next;
-				}
-
-				if (name_set && listCount(item->urls) > 0) {
-					addItem(item, &itemList);
-				} else {
-          freeFeedItem(item);
-        }
-
-				child = cur = NULL;
-			}
-		} else {
-			cur = nodes->nodeTab[i];
-			dbg_printf(P_ERROR, "Unknown node \"%s\": type %d", cur->name, cur->type);
-		}
+		      child = cur = NULL;
+	      }
+      } else {
+	      cur = nodes->nodeTab[i];
+	      dbg_printf(P_ERROR, "Unknown node \"%s\": type %d", cur->name, cur->type);
+      }
 	}
+
 	dbg_printf(P_INFO2, "== Done extracting RSS items ==");
 	return itemList;
 }
