@@ -36,14 +36,15 @@ struct auto_handle {
 	char *statefile;
 	char *download_folder;
 	char *prowl_key;
-	rss_feeds 	feeds;
+	rss_feeds   feeds;
 	am_filters  filters;
 	simple_list downloads;
 	int8_t      rpc_version;
 	uint8_t     prowl_key_valid;
 	uint16_t    max_bucket_items;
-	uint8_t 		bucket_changed;
-	uint8_t 		check_interval;
+	uint8_t     bucket_changed;
+	uint8_t     check_interval;
+	uint8_t     match_only;
 };
 /** \endcond */
 

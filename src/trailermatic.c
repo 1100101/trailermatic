@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008 Frank Aurich 
+ * Copyright (C) 2008 Frank Aurich
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License as
@@ -84,8 +84,9 @@ PRIVATE void usage(void) {
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 PRIVATE void readargs(int argc, char ** argv, char **c_file, char** logfile, char **xmlfile,
-                      uint8_t * nofork, uint8_t * verbose, uint8_t *once, uint8_t *append_log) {
-  char optstr[] = "afhv:c:l:ox:";
+                      uint8_t * nofork, uint8_t * verbose, uint8_t *once, uint8_t *append_log,
+					  uint8_t * match_only) {
+  char optstr[] = "afhv:c:l:ox:m";
   struct option longopts[] = {
     { "verbose",    required_argument, NULL, 'v' },
     { "nodaemon",   no_argument,       NULL, 'f' },
@@ -95,6 +96,7 @@ PRIVATE void readargs(int argc, char ** argv, char **c_file, char** logfile, cha
     { "logfile",    required_argument, NULL, 'l' },
     { "append-log", no_argument,       NULL, 'a' },
     { "xml",        required_argument, NULL, 'x' },
+    { "match-only", no_argument,       NULL, 'm' },
     { NULL, 0, NULL, 0 } };
   int opt;
 
@@ -122,6 +124,9 @@ PRIVATE void readargs(int argc, char ** argv, char **c_file, char** logfile, cha
         break;
       case 'o':
         *once = 1;
+        break;
+      case 'm':
+        *match_only = 1;
         break;
       default:
         usage();
@@ -261,6 +266,7 @@ auto_handle* session_init(void) {
   ses->statefile             = am_strdup(path);
   ses->prowl_key             = NULL;
   ses->prowl_key_valid       = 0;
+  ses->match_only            = 0;
 
   /* lists */
   ses->filters               = NULL;
@@ -293,55 +299,56 @@ PRIVATE void session_free(auto_handle *as) {
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 PRIVATE void processRSSList(auto_handle *session, const simple_list items, uint16_t feedID) {
+   simple_list current_item = items;
+   simple_list current_url = NULL;
+   am_filter filter = NULL;
+   const char * url;
+   char path[4096];
+   HTTPResponse *response = NULL;
 
-  simple_list current_item = items;
-  simple_list current_url = NULL;
-  am_filter filter = NULL;
-  const char * url;
-  char path[4096];
-  HTTPResponse *response = NULL;
+   while(current_item && current_item->data) {
+      feed_item item = (feed_item)current_item->data;
+      current_url = item->urls;
+      while(current_url && current_url->data) {
+         url = (const char*)current_url->data;
+         if(isMatch(session->filters, url, &filter)) {
+            if(!session->match_only) {
+               get_filename(path, NULL, url, session->download_folder);
+               if (!has_been_downloaded(session->downloads, url) && !file_exists(path)) {
+                  dbg_printft(P_MSG, "[%d] Found new download: %s (%s)", feedID, item->name, url);
+                  response = downloadFile(url, path, filter->agent);
+                  if(response) {
+                     if(response->responseCode == 200) {
+                        if(session->prowl_key_valid) {
+                           prowl_sendNotification(PROWL_NEW_TRAILER, session->prowl_key, item->name);
+                        }
 
-  while(current_item && current_item->data) {
-    feed_item item = (feed_item)current_item->data;
-    current_url = item->urls;
-    while(current_url && current_url->data) {
-      url = (char*)current_url->data;
-      if(isMatch(session->filters, url, &filter)) {
-        get_filename(path, NULL, url, session->download_folder);
-        if (!has_been_downloaded(session->downloads, url) && !file_exists(path)) {
-          dbg_printft(P_MSG, "[%d] Found new download: %s (%s)", feedID, item->name, url);
-          response = downloadFile(url, path, filter->agent);
-          if(response) {
-            if(response->responseCode == 200) {
-              if(session->prowl_key_valid) {
-                prowl_sendNotification(PROWL_NEW_TRAILER, session->prowl_key, item->name);
-              }
+                        dbg_printf(P_MSG, "  Download complete (%dMB) (%.2fkB/s)", response->size / 1024 / 1024, response->downloadSpeed / 1024);
+                        /* add url to bucket list */
+                        if (addToBucket(url, &session->downloads, session->max_bucket_items) == 0) {
+                           session->bucket_changed = 1;
+                           save_state(session->statefile, session->downloads);
+                        }
+                     } else {
+                        dbg_printf(P_ERROR, "  Error: Download failed (Error Code %d)", response->responseCode);
+                        if(session->prowl_key_valid) {
+                           prowl_sendNotification(PROWL_DOWNLOAD_FAILED, session->prowl_key, item->name);
+                        }
+                     }
 
-              dbg_printf(P_MSG, "  Download complete (%dMB) (%.2fkB/s)", response->size / 1024 / 1024, response->downloadSpeed / 1024);
-              /* add url to bucket list */
-              if (addToBucket(url, &session->downloads, session->max_bucket_items) == 0) {
-                session->bucket_changed = 1;
-                save_state(session->statefile, session->downloads);
-              }
+                     HTTPResponse_free(response);
+                  }
+               } else {
+                 dbg_printf(P_MSG, "File downloaded previously: %s", basename(path));
+               }
             } else {
-              dbg_printf(P_ERROR, "  Error: Download failed (Error Code %d)", response->responseCode);
-              if(session->prowl_key_valid) {
-                prowl_sendNotification(PROWL_DOWNLOAD_FAILED, session->prowl_key, item->name);
-              }
+               dbg_printft(P_MSG, "[%s] Match: %s (%s)", feedID, item->name, url);
             }
-
-            HTTPResponse_free(response);
-          }
-        } else {
-          dbg_printf(P_MSG, "File downloaded previously: %s", basename(path));
-        }
+         }
+         current_url = current_url->next;
       }
-
-      current_url = current_url->next;
-    }
-
-    current_item = current_item->next;
-  }
+      current_item = current_item->next;
+   }
 }
 
 PRIVATE HTTPResponse* getRSSFeed(const rss_feed* feed, CURL **session) {
@@ -418,6 +425,7 @@ int main(int argc, char **argv) {
   uint8_t once = 0;
   uint8_t verbose = AM_DEFAULT_VERBOSE;
   uint8_t append_log = 0;
+  uint8_t match_only = 0;
 
   /* this sets the log level to the default before anything else is done.
   ** This way, if any outputting happens in readargs(), it'll be printed
@@ -425,7 +433,7 @@ int main(int argc, char **argv) {
   */
   log_init(NULL, verbose, 0);
 
-  readargs(argc, argv, &config_file, &logfile, &xmlfile, &nofork, &verbose, &once, &append_log);
+  readargs(argc, argv, &config_file, &logfile, &xmlfile, &nofork, &verbose, &once, &append_log, &match_only);
 
   /* reinitialize the logging with the values from the command line */
   log_init(logfile, verbose, append_log);
@@ -436,6 +444,7 @@ int main(int argc, char **argv) {
   strncpy(AutoConfigFile, config_file, strlen(config_file));
 
   session = session_init();
+  session->match_only = match_only;
 
   if(parse_config_file(session, AutoConfigFile) != 0) {
     if(errno == ENOENT) {
@@ -487,7 +496,7 @@ int main(int argc, char **argv) {
   }
 
   /* check if Prowl API key is given, and if it is valid */
-  if(session->prowl_key && verifyProwlAPIKey(session->prowl_key) ) { 
+  if(session->prowl_key && verifyProwlAPIKey(session->prowl_key) ) {
     session->prowl_key_valid = 1;
   }
 
