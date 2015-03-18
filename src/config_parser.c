@@ -342,6 +342,8 @@ PRIVATE int set_option(auto_handle *as, const char *opt, const char *param, opti
     parseFilter(&as->filters, param);
   } else if(!strcmp(opt, "prowl-apikey")) {
     as->prowl_key = am_strdup(param);
+  } else if(!strcmp(opt, "download-done-script")) {
+    as->download_done_script = am_strdup(param);
   } else {
     dbg_printf(P_ERROR, "Unknown option: %s", opt);
   }

@@ -36,6 +36,7 @@ struct auto_handle {
 	char *statefile;
 	char *download_folder;
 	char *prowl_key;
+	char *download_done_script;
 	rss_feeds   feeds;
 	am_filters  filters;
 	simple_list downloads;

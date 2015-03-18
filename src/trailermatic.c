@@ -57,6 +57,7 @@
 
 PRIVATE char AutoConfigFile[MAXPATHLEN + 1];
 PRIVATE void session_free(auto_handle *as);
+PRIVATE void callDownloadDoneScript(const char* scriptname, const char* filename);
 
 uint8_t closing = 0;
 uint8_t nofork  = AM_DEFAULT_NOFORK;
@@ -266,6 +267,7 @@ auto_handle* session_init(void) {
   ses->statefile             = am_strdup(path);
   ses->prowl_key             = NULL;
   ses->prowl_key_valid       = 0;
+  ses->download_done_script  = NULL;
   ses->match_only            = 0;
 
   /* lists */
@@ -287,6 +289,8 @@ PRIVATE void session_free(auto_handle *as) {
     as->statefile = NULL;
     am_free(as->prowl_key);
     as->prowl_key = NULL;
+    am_free(as->download_done_script);
+    as->download_done_script = NULL;
     freeList(&as->feeds, feed_free);
     freeList(&as->downloads, NULL);
     freeList(&as->filters, filter_free);
@@ -309,7 +313,8 @@ PRIVATE void processRSSList(auto_handle *session, const simple_list items, uint1
    while(current_item && current_item->data) {
       feed_item item = (feed_item)current_item->data;
       current_url = item->urls;
-      while(current_url && current_url->data) {
+      while(current_url && current_url->data)
+      {
          url = (const char*)current_url->data;
          if(isMatch(session->filters, url, &filter)) {
             if(!session->match_only) {
@@ -321,6 +326,11 @@ PRIVATE void processRSSList(auto_handle *session, const simple_list items, uint1
                      if(response->responseCode == 200) {
                         if(session->prowl_key_valid) {
                            prowl_sendNotification(PROWL_NEW_TRAILER, session->prowl_key, item->name);
+                        }
+
+                        if(session->download_done_script && *(session->download_done_script))
+                        {
+                          callDownloadDoneScript(session->download_done_script, path);
                         }
 
                         dbg_printf(P_MSG, "  Download complete (%dMB) (%.2fkB/s)", response->size / 1024 / 1024, response->downloadSpeed / 1024);
@@ -528,5 +538,34 @@ int main(int argc, char **argv) {
   }
   shutdown_daemon(session);
   return 0;
+}
+
+PRIVATE void
+onSigCHLD (int i)
+{
+  int rc;
+  do
+    rc = waitpid (-1, NULL, WNOHANG);
+  while (rc>0 || (rc==-1 && errno==EINTR));
+}
+
+PRIVATE void callDownloadDoneScript(const char* scriptname, const char* filename)
+{
+  if (scriptname && *scriptname && filename && *filename)
+  {
+    int i;
+    char * cmd[] = { am_strdup(scriptname), am_strdup(filename), NULL };
+    signal(SIGCHLD, onSigCHLD);
+
+    if (!fork ())
+    {
+      if (execvp (scriptname, cmd) == -1)
+        dbg_printf(P_ERROR, "error executing script \"%s\": %d", cmd[0], errno);
+
+      _exit (0);
+    }
+
+    for (i=0; cmd[i]; ++i) am_free (cmd[i]);
+  }
 }
 
