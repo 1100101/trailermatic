@@ -22,3 +22,8 @@ Makefile
 
 src/trailermatic
 src/trailermatic-mw
+compile
+.dirstamp
+*.bak
+*.trs
+test-driver
