@@ -27,3 +27,4 @@ compile
 *.bak
 *.trs
 test-driver
+src/version.h
