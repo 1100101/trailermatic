@@ -1,5 +1,5 @@
 SUBDIRS = . tests
-INCLUDES = -I$(top_srcdir)/include/
+AM_CPPFLAGS = -I$(top_srcdir)/include/
 
 AM_CFLAGS = $(LIBXML_CFLAGS) $(LIBCURL_CFLAGS) $(PCRE_CFLAGS)
 
@@ -69,7 +69,7 @@ LDADD = \
     $(PCRE_LIBS)
 
 clean-local:
-	if test -d .svn; then rm -f version.h; fi;
+	rm -f version.h
 
 EXTRA_trailermatic_SOURCES = \
     version.h
@@ -78,8 +78,9 @@ BUILT_SOURCES = \
     version.h
 
 version.h:
-	echo '#define SVN_REVISION          "'`svn info | grep "Revision" | awk -F': ' '{print $$2}'`'"' > version.h
-	echo '#define LONG_VERSION_STRING   "'@VERSION_NUMBER@' ('`svn info | grep "Revision" | awk -F': ' '{print $$2}'`')"' >> version.h
+	echo '#define SVN_REVISION          "'`git rev-parse --short HEAD`'"' > version.h
+	echo '#define SHORT_VERSION_STRING  "'@VERSION_NUMBER@'"' >> version.h
+	echo '#define LONG_VERSION_STRING   "'@VERSION_NUMBER@' ('`git rev-parse --short HEAD`')"' >> version.h
 
 strip:
 	$(STRIP) $(bin_PROGRAMS)

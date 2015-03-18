@@ -7,7 +7,7 @@ AC_INIT([Trailermatic],[version_number],[http://forum.dsmg600.info/t2291-%5BREL%
 AC_SUBST(VERSION_NUMBER,[version_number])
 
 AC_CONFIG_SRCDIR([src/trailermatic.c])
-AM_INIT_AUTOMAKE([1.10 foreign])
+AM_INIT_AUTOMAKE([1.10 foreign subdir-objects])
 
 # Checks for c compiler.
 AC_PROG_CC

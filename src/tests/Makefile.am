@@ -1,4 +1,4 @@
-INCLUDES = -I$(top_srcdir)/include/
+AM_CPPFLAGS = -I$(top_srcdir)/include/
 
 check_PROGRAMS = list_test base64_test regex_test http_test json_test prowl_test parser_test
 
@@ -14,6 +14,7 @@ http_test_SOURCES = $(GLOBAL_SOURCES)  \
    http_test.c                         \
    $(top_srcdir)/src/web.c             \
    $(top_srcdir)/src/regex.c           \
+   $(top_srcdir)/src/urlcode.c         \
    $(top_srcdir)/src/file.c
 
 list_test_SOURCES = $(GLOBAL_SOURCES) \
