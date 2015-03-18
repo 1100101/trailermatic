@@ -337,23 +337,30 @@ PUBLIC HTTPResponse* downloadFile(const char *url, const char *filename, const c
     curl_global_init(CURL_GLOBAL_ALL);
     gbGlobalInitDone = TRUE;
   }
-    curl_handle = am_curl_init(FALSE);
+
+  curl_handle = am_curl_init(FALSE);
+
+  if(!curl_handle)
+  {
+    dbg_printf(P_ERROR, "curl_handle is uninitialized!");
+  }
 
   if(filename && *filename) {
     stream = fopen(filename, "wb");
     if(stream == NULL) {
       dbg_printf(P_ERROR, "Cannot open '%s' for writing: %s", filename, strerror(errno));
-    }     
+    }
   }
 
-  if(curl_handle && stream) {
+  if(curl_handle && stream)
+  {
     escaped_url = url_encode_whitespace(url);
     assert(escaped_url);
     resp = HTTPResponse_new();
     curl_easy_setopt(curl_handle, CURLOPT_URL, escaped_url);
     curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, NULL);
     curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, stream);
-    
+
     if(useragent && *useragent) {
       curl_easy_setopt(curl_handle, CURLOPT_USERAGENT, useragent);
     }
@@ -374,16 +381,18 @@ PUBLIC HTTPResponse* downloadFile(const char *url, const char *filename, const c
       resp->size = (size_t)downloadSize;
       resp->downloadSpeed = downloadSpeed; 
     }
-    
+
     am_free(escaped_url);
-  } else {
-    dbg_printf(P_ERROR, "curl_handle is uninitialized!");
+  }
+  else
+  {
     resp = NULL;
   }
 
   if(curl_handle != NULL) {
     closeCURLSession(curl_handle);
   }
+
   if(stream != NULL) {
     fclose(stream);
   }
